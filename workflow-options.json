@@ -1,0 +1,9 @@
+{
+    "workflow_failure_mode": "NoNewCalls",
+    "default_runtime_attributes": {
+        "maxRetries": 1
+    },
+    "write_to_cache": true,
+    "read_from_cache": true,
+    "final_workflow_outputs_dir": "/fh/fast/paguirigan_a/trgen/Cromwell/cromwell-outputs"
+}
