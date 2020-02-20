@@ -4,14 +4,13 @@
 workflow rnaSeqVariantCalling {
 
   # sample specific parameters
-  String sampleName
+  String base_file_name
   Array[File] R1Fastq
   Array[File] R2Fastq
 
   #Software modules for gizmo
   String GATKModule
   String samtoolsModule
-  String annovarModule
   String starModule
   String perlModule
   
@@ -42,11 +41,13 @@ workflow rnaSeqVariantCalling {
   call SortBed {
     input:
       unsorted_bed = bedFile,
-      ref_dict = ref_dict
+      ref_dict = ref_dict,
+      modules = GATKModule
   }
 
   call concatenateFastqs {
     input:
+    base_file_name = base_file_name,
     fastqR1String = R1Fastq,
     fastqR2String = R2Fastq
   }
@@ -55,8 +56,8 @@ workflow rnaSeqVariantCalling {
 	call StarAlign { 
 		input: 
       genomeDir = STARgenomeDir,
-			fastq1 = concatenateFastqs.R1Fastq,
-      fastq2 = concatenateFastqs.R2Fastq,
+			fastq1 = concatenateFastqs.R1fastq,
+      fastq2 = concatenateFastqs.R2fastq,
 			base_file_name = base_file_name,
       referenceGenome = referenceGenome,
       modules = starModule + " " + samtoolsModule,
@@ -104,14 +105,14 @@ workflow rnaSeqVariantCalling {
         ref_fasta_index = ref_fasta_index,
         dbSNP_vcf = dbSNP_vcf,
         dbSNP_vcf_index = dbSNP_vcf_index,
-        modules = GATKModule + " " + bcftoolsModule
+        modules = GATKModule
     }
 
 	call VariantFiltration {
 		input:
 			input_vcf = HaplotypeCaller.output_vcf,
-			input_vcf_index = HaplotypeCaller.output_vcf_index,
-			base_file_name = sampleName + ".variant_filtered.vcf.gz",
+			input_vcf_index = HaplotypeCaller.output_index,
+			base_file_name = base_file_name + ".variant_filtered.vcf.gz",
 			ref_fasta = ref_fasta,
 			ref_fasta_index = ref_fasta_index,
 			ref_dict = ref_dict,
@@ -131,12 +132,11 @@ workflow rnaSeqVariantCalling {
 
 # Outputs that will be retained when execution is complete
 output {
-    File GATK_vcf = combineVariants.combinedVcf
-    Array[File] targetQC = bedToolsQC.meanQC
-    File whitelistedCellBarcodes = umiTools_whitelist.whitelist
-    File genotypedBarcodes = barcodeConsensus.barcodeList
-    Array[File] GATK_annotated_vcf = annovar.output_annotated_vcf
-    Array[File] GATK_annotated = annovar.output_annotated_table
+    File analysisReadyBam = SplitNCigarReads.splitBam
+    File analysisReadyBamIndex = SplitNCigarReads.splitBamIndex
+    File GATK_vcf = VariantFiltration.output_vcf
+    File GATK_annotated_vcf = annovar.output_annotated_vcf
+    File GATK_annotated = annovar.output_annotated_table
 
   }
 }# End workflow
@@ -298,7 +298,7 @@ task StarAlign {
 	}
 	runtime {
 		memory: 8000
-		cpu: ${threads}
+		cpu: "${threads}"
 		walltime: "02:00:00"
     modules: "${modules}"
 	}
@@ -311,7 +311,7 @@ task StarAlign {
 }
 
 # split reads when they align across a junction
-task SplitNCigarReads{
+task SplitNCigarReads {
   File input_bam
   File input_bam_index
   String base_file_name
@@ -383,12 +383,8 @@ task VariantFiltration {
     modules: "${modules}"
   }
 	output {
-    	File output_vcf = "${base_name}"
-    	File output_vcf_index = "${base_name}.tbi"
-	}
-
-	runtime {
-		modules: "${modules}"
+    	File output_vcf = "${base_file_name}"
+    	File output_vcf_index = "${base_file_name}.tbi"
 	}
 }
 
@@ -426,19 +422,19 @@ task annovar {
 }
 
 task concatenateFastqs {
-  Array fastqR1String
-  Array fastqR2String
+  Array[File] fastqR1String
+  Array[File] fastqR2String
   String base_file_name
 
   command {
     set -eo pipefail
 
-    cat "${fastqR1String[@]}" > ${base_file_name}_R1.fastq.gz
-    cat "${fastqR2String[@]}" > ${base_file_name}_R2.fastq.gz
+    cat "${sep=" " fastqR1String}[@]" > ${base_file_name}_R1.fastq.gz
+    cat "${sep=" " fastqR2String}[@]" > ${base_file_name}_R2.fastq.gz
     }
   runtime {
-    cpu: 4
-    memory: 8000
+    cpu: 2
+    memory: 4000
     partition: "campus"
   }
   output {

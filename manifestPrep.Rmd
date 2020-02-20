@@ -1,72 +1,58 @@
 ---
 title: "RNA Seq Variant Calling"
 author: "Amy Paguirigan"
-date: "12/9/2019"
+date: "2/20/2020"
 output: html_document
 editor_options: 
   chunk_output_type: console
 ---
 # Install Required Packages
 
-## For Local Use
 ```{r eval=FALSE, message=FALSE, warning=TRUE, include=FALSE}
-remotes::install_github('FredHutch/tgR')
 remotes::install_github('FredHutch/fh.wdlR')
 ```
 
 # Load Packages
 ```{r}
-library(tidyverse); library(aws.s3); library(tgR); library(fh.wdlR)
+library(tidyverse);library(fh.wdlR)
 ```
 
-# Set Credentials (run one line)
-```{r eval=FALSE, include=FALSE}
-setCreds(tokenSet = "file", path = "~/github/cred/paguirigan.R") #DVTC
-```
 
-# Find files
+# create your Cromwell server or find it and set environment variables (or do it the manual way)
 ```{r}
-tags <- listS3Objects(bucket = "fh-pi-paguirigan-a")
-annotations <- tgrAnnotate(DAG = "paguirigana")
-monsterMash <- dplyr::left_join(tags, annotations) %>% dropWhen()
-
-rna <- monsterMash %>% filter(genomics_type == "rnaseq" & is.na(workflowID) == T & 
-                                  specimen_privacy == "publiclyavailable"); rna %>% group_by(stage) %>% summarize(n_distinct(molecular_id))
-
-k562 <- rna %>% filter(omics_sample_name == "K562")
-```
-
-```{r}
-#Manually made a batch file this first time. 
-```
-
-
-```{r}
-
+cromwellCreate(cromwellCreate(FredHutchId = "apaguiri", port = "1981",
+        pathToServerLogs = "/home/user/gizmo-%A.txt",
+        pathToServerScript = "/home/user/serverScript.sh",
+        pathToParams = "/home/user/params.sh"))
+setCromwellURL(FredHutchId = "apaguiri", jobId = "45533124", port = "1981")
+Sys.setenv("CROMWELLURL" = "http://gizmoxxx:2020")
 ```
 
 
 # Submit Job to gizmo Cromwell
 Note: setwd to location of workflow files
 ```{r}
-valid <- womtoolValidate(WDL = "SC10x-gizmo-umisplit.wdl"); valid[["errors"]]
-thisJob <- cromwellSubmitBatch(WDL = "SC10x-gizmo-umisplit.wdl",
-                    Params = "SC10x-gizmo-parameters.json",
-                    Batch = "SC10x-gizmo-sample.json",
+list.files(pattern = "*.wdl")
+valid <- womtoolValidate(WDL = "fh-gatk4-rnaseqvariant.wdl"); valid[["errors"]]
+list.files(pattern = "*.json")
+thisJob <- cromwellSubmitBatch(WDL = "fh-gatk4-rnaseqvariant.wdl",
+                    Params = "rna-variant-gizmo-parameters.json",
+                    Batch = "rna-variant-gizmo-sample.json",
                     Options = "workflow-options.json",
-                    Labels = data.frame("workflowNotes" = "umisplit-lessSTARmemory"))
+                    Labels = data.frame("workflowNotes" = "wow-first time"))
 
 thisOne<- thisJob$id; thisOne
 ```
 
 ```{r}
+thisOne <- "c0f8aec4-bd87-4703-b798-fa01f568e7b8" # first one
 ```
 
 
 # Monitor Running Jobs
 ```{r}
 jobs <- cromwellJobs()
-WTF <- cromwellGlob(thisOne)
+WTF <- cromwellGlob(thisOne); WTF[["failures"]]
 w <- cromwellWorkflow(thisOne); w$status
 c <- cromwellCall(thisOne); c %>% group_by(callName, executionStatus) %>% summarize(status = n())%>% arrange(executionStatus)
 ca <- cromwellCache(thisOne); ca %>% group_by(callCaching.hit, callName) %>% summarize(hits = n()) 
@@ -80,13 +66,6 @@ f <- cromwellFailures(thisOne)
 # Output Processing workflow prep (copyNTag)
 ```{r}
 out <- cromwellOutputs(thisOne)
-#batchFileName <- gsub("tsv.*$", "tsv", gsub("^.*batchFile[^s3]*s3://fh-pi-paguirigan-a-genomicsrepo/", "", w$inputs))
-batchFile <- s3read_using(FUN = read.delim, stringsAsFactors = F,
-                           object = batchFileName,
-                           bucket = "fh-pi-paguirigan-a-genomicsrepo")
-#batchFile <- manifest
-batchFile$shardIndex <- as.character(seq(from = 0, to = nrow(batchFile)-1, by = 1))
-annotatedOutputs <- inner_join(batchFile, out, by = c("shardIndex")) 
 ```
 
 
