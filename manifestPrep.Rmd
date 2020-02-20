@@ -20,50 +20,57 @@ library(tidyverse);library(fh.wdlR)
 
 # create your Cromwell server or find it and set environment variables (or do it the manual way)
 ```{r}
-cromwellCreate(cromwellCreate(FredHutchId = "apaguiri", port = "1981",
+cromwellCreate(cromwellCreate(FredHutchId = "username", port = "2020",
         pathToServerLogs = "/home/user/gizmo-%A.txt",
         pathToServerScript = "/home/user/serverScript.sh",
         pathToParams = "/home/user/params.sh"))
-setCromwellURL(FredHutchId = "apaguiri", jobId = "45533124", port = "1981")
-Sys.setenv("CROMWELLURL" = "http://gizmoxxx:2020")
+setCromwellURL(FredHutchId = "username", jobId = "45533124", port = "2020")
+Sys.setenv("CROMWELLURL" = "http://gizmoxxxx:2020")
+```
+
+# Validate your workflow
+```{r}
+valid <- womtoolValidate(WDL = "fh-gatk4-rnaseqvariant.wdl"); valid[["errors"]]
 ```
 
 
 # Submit Job to gizmo Cromwell
-Note: setwd to location of workflow files
 ```{r}
-list.files(pattern = "*.wdl")
-valid <- womtoolValidate(WDL = "fh-gatk4-rnaseqvariant.wdl"); valid[["errors"]]
-list.files(pattern = "*.json")
 thisJob <- cromwellSubmitBatch(WDL = "fh-gatk4-rnaseqvariant.wdl",
                     Params = "rna-variant-gizmo-parameters.json",
                     Batch = "rna-variant-gizmo-sample.json",
                     Options = "workflow-options.json",
-                    Labels = data.frame("workflowNotes" = "wow-first time"))
+                    Labels = data.frame("workflowNotes" = "do the work!"))
 
 thisOne<- thisJob$id; thisOne
 ```
 
+# Notes for workflow IDs to keep handy
 ```{r}
-thisOne <- "c0f8aec4-bd87-4703-b798-fa01f568e7b8" # first one
+thisOne <-  "07cf8df7-77ea-4ffd-b233-e4ae895f99fd"
 ```
 
 
 # Monitor Running Jobs
 ```{r}
 jobs <- cromwellJobs()
+
 WTF <- cromwellGlob(thisOne); WTF[["failures"]]
+
 w <- cromwellWorkflow(thisOne); w$status
-c <- cromwellCall(thisOne); c %>% group_by(callName, executionStatus) %>% summarize(status = n())%>% arrange(executionStatus)
+
+c <- cromwellCall(thisOne); c %>% group_by(callName, executionStatus) %>% summarize(status = n(), duration = mean(callDuration, na.rm = T))%>% arrange(executionStatus)
+
 ca <- cromwellCache(thisOne); ca %>% group_by(callCaching.hit, callName) %>% summarize(hits = n()) 
+
 cromwellTiming(thisOne)
-butWhy <- left_join(c, mutate_all(ca, as.character)); butWhy %>% group_by(callName, executionStatus, callCaching.hit) %>% summarize(hits = n()) %>% arrange(desc(executionStatus), callCaching.hit)
-f <- cromwellFailures(thisOne)
+
+f <- cromwellFailures(thisOne); f
 #abort <- cromwellAbort(thisOne) # Careful with this
 ```
 
 
-# Output Processing workflow prep (copyNTag)
+# Output information
 ```{r}
 out <- cromwellOutputs(thisOne)
 ```

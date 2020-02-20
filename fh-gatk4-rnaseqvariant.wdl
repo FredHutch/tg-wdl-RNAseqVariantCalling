@@ -164,7 +164,6 @@ task SortBed {
   }
   runtime {
     modules: "${modules}"
-    docker: "broadinstitute/gatk:4.1.0.0"
   }
   output {
     File intervals = "sorted.interval_list"
@@ -218,7 +217,6 @@ task ApplyBaseRecalibrator {
     memory: 8000
     cpu: 4
     partition: "campus"
-    walltime: "01:00:00"
     modules: "${modules}"
   }
   output {
@@ -256,13 +254,13 @@ task HaplotypeCaller {
 
   }
   runtime {
-    memory: 8000
+    cpu: 2
     walltime: "00:45:00"
     modules: "${modules}"
   }
   output {
     File output_vcf = "${base_file_name}.vcf.gz"
-    File output_index = "${base_file_name}.vcf.gz.csi"
+    File output_index = "${base_file_name}.vcf.gz.tbi"
   }
 }
 
@@ -299,7 +297,6 @@ task StarAlign {
 	runtime {
 		memory: 8000
 		cpu: "${threads}"
-		walltime: "02:00:00"
     modules: "${modules}"
 	}
   output {
@@ -343,7 +340,6 @@ task SplitNCigarReads {
   runtime {
     memory: 16000
     partition: "campus"
-    walltime: "02:00:00"
     modules: "${modules}"
   }
   output {
@@ -352,19 +348,14 @@ task SplitNCigarReads {
  }
 }
 
-
 task VariantFiltration {
-
 	File input_vcf
 	File input_vcf_index
 	String base_file_name
-
  	File ref_dict
  	File ref_fasta
  	File ref_fasta_index
-
 	String modules
-
 	command {
   set -eo pipefail
 		 gatk \
@@ -388,9 +379,6 @@ task VariantFiltration {
 	}
 }
 
-
-
-
 # annotate with annovar
 task annovar {
   File input_vcf
@@ -412,7 +400,6 @@ task annovar {
     -nastring . -vcfinput
   }
   runtime {
-    docker: "perl:5.28.0"
     modules: "${modules}"
   }
   output {
@@ -429,8 +416,8 @@ task concatenateFastqs {
   command {
     set -eo pipefail
 
-    cat "${sep=" " fastqR1String}[@]" > ${base_file_name}_R1.fastq.gz
-    cat "${sep=" " fastqR2String}[@]" > ${base_file_name}_R2.fastq.gz
+    cat ${sep=" " fastqR1String} > ${base_file_name}_R1.fastq.gz
+    cat ${sep=" " fastqR2String} > ${base_file_name}_R2.fastq.gz
     }
   runtime {
     cpu: 2
